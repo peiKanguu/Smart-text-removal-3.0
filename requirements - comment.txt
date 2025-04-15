@@ -1,0 +1,14 @@
+# OCR识别与深度学习框架
+paddleocr==2.6.1             # OCR文字检测与识别库，封装PaddlePaddle后端
+paddlepaddle==2.5.0          # 飞桨深度学习框架，PaddleOCR所依赖的底层框架
+
+# 图像处理与基础工具
+opencv-python                # 图像读取、绘图、掩码生成、坐标处理等
+numpy                        # 数组计算，用于坐标操作、掩码生成
+tqdm                         # 显示处理进度条
+
+# LaMa 修复模型依赖
+einops                       # 用于处理Tensor结构的轻量级工具（LaMa模型使用）
+omegaconf                    # 配置管理库，用于LaMa模型参数加载
+Pillow                       # 图像读写与格式转换，用于增强兼容性
+albumentations               # 数据增强库，LaMa或图像处理阶段可能使用

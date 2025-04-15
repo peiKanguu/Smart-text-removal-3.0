@@ -1,0 +1,9 @@
+paddleocr==2.6.1
+paddlepaddle==2.5.0
+opencv-python
+numpy
+tqdm
+einops
+omegaconf
+Pillow
+albumentations
