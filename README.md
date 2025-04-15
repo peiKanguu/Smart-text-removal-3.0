@@ -86,6 +86,23 @@ SmartTextRemoval3.0/
    ✏️ [3] "仅限今天"（置信度: 0.88）
 ```
 
+#### openCV掩码生成
+根据 OCR 模块识别出的文字坐标框，使用 OpenCV 绘制一个二值掩码图（mask），用于后续送入 LaMa 模型做修复。
+- 输入：
+  - 原图 image（np.ndarray，OpenCV读取的图像）
+  - OCR 识别结果 detections（列表，包含文字的坐标框）
+- 输出：
+  - 掩码图 mask（单通道、黑白图像，文字区域为255，背景为0）
+
+拓展（待完成）
+- [ ] 对掩码进行膨胀处理，以防漏字或边缘断裂
+```python
+kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+mask = cv2.dilate(mask, kernel, iterations=1)
+```
+- [ ] 保存调试用的 mask 图像
+```python
+cv2.imwrite('./outputs/mask_debug/xxx_mask.png', mask)
 ---
 
 ## 🛠️ 待办建议（可选）
