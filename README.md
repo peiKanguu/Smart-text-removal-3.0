@@ -25,6 +25,9 @@ SmartTextRemoval3.0/
 │   └── mask_generator.py        # 根据OCR坐标生成掩码（OpenCV绘图）
 ├── lama_cleaner_model/          # 模块3：修复模型调用（如LaMa）
 │   └── run_lama_cleaner.py      # 调用修复模型填补被删除文字
+├── pretrained/          # 预训练模型
+│   └── big-lama/
+├── lama/                # 安装 LaMa 推理代码
 ├── lama_env/                    # 虚拟环境目录（可忽略上传，仅本地生成）
 ├── main.py                      # 主程序，串联整个流程
 ├── setup_env.bat                # 一键创建并激活虚拟环境 + 安装依赖的脚本
@@ -62,8 +65,6 @@ SmartTextRemoval3.0/
 - 使用 PaddleOCR 识别文字
 - 提取每张图片的检测结果（文字 + 坐标 + 置信度）保存到日志中
 
-
-
 #### OCR文字识别
 - 将一张图片输入，输出识别出来的文字 + 位置 + 置信度
 - 分别输出到日志中以及控制台上
@@ -94,16 +95,37 @@ SmartTextRemoval3.0/
 - 输出：
   - 掩码图 mask（单通道、黑白图像，文字区域为255，背景为0）
 
-拓展（待完成）
-- [ ] 对掩码进行膨胀处理，以防漏字或边缘断裂
+#### 修复模型调用（LaMa）
+使用 OCR 生成的掩码，对图像进行内容感知修复，去除文字并还原背景。
+使用的是 PyTorch 版本的 LaMa
+##### 准备工作
+第一步：将模型放入项目目录下
 ```python
-kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-mask = cv2.dilate(mask, kernel, iterations=1)
+Smart-text-removal-3.0/
+├── pretrained/
+│   └── big-lama/
+│       ├── models/
+│       │   └── best.ckpt
+│       └── config.yaml
 ```
-- [ ] 保存调试用的 mask 图像
+第二步：安装 LaMa 推理代码（只需代码，不需要下载模型）
+打开终端，进入你的项目目录下运行：
 ```python
-cv2.imwrite('./outputs/mask_debug/xxx_mask.png', mask)
----
+git clone https://github.com/saic-mdal/lama.git
+```
+此时
+```python
+Smart-text-removal-3.0/
+├── pretrained/
+│   └── big-lama/
+├── lama/
+│   └── saicinpainting/       ← 包含核心代码
+```
+- 修复模型输入：
+  - 原图：image（OpenCV读取）
+  - 掩码：mask（文字区域为255，背景为0）
+- 输出图像：cleaned_image（修复后的图）
+- 
 
 ## 🛠️ 待办建议（可选）
 
