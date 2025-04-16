@@ -4,6 +4,7 @@ import json
 from tqdm import tqdm
 import numpy as np
 np.int = int  # ✅ 解决 numpy.int 报错
+from utils.mask_generator import generate_mask
 
 # ✅ 安全导入 detect_text
 try:
@@ -12,10 +13,10 @@ except Exception as e:
     print("❌ 导入模块失败:", e)
     exit(1)
 
-
 # 配置路径
 input_folder = './datasets/input_images'
 output_log_folder = './outputs/detection_logs'
+output_mask_folder = './outputs/mask_debug'
 
 # 确保输出文件夹存在
 os.makedirs(output_log_folder, exist_ok=True)
@@ -63,6 +64,10 @@ def process_image(img_path):
         json.dump(log_data, f, ensure_ascii=False, indent=2)
 
     print(f"✅ {img_name} -> 识别结果已保存至日志")
+    
+    # 🧪 步骤 3：生成并保存调试用掩码图
+    mask_path = os.path.join(output_mask_folder, base_name + '_mask.png')
+    mask = generate_mask(img, detections, save_path=mask_path)
 
 if __name__ == "__main__":
     print("🚀 开始批量处理图片...")
