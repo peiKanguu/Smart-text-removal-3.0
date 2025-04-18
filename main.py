@@ -18,7 +18,26 @@ input_folder = './datasets/input_images'
 output_log_folder = './outputs/detection_logs'
 output_mask_folder = './outputs/mask_debug'
 
-# 确保输出文件夹存在
+# 根据图片特征（尺寸 + 掩码特征）判断使用openCV的算法
+def choose_inpaint_method(img, mask):
+    h, w = img.shape[:2]
+    img_area = h * w
+
+    # 掩码白色像素个数（即需修复的区域）
+    mask_area = np.sum(mask > 0)
+
+    ratio = mask_area / img_area
+
+    # 👇 可调节阈值，设置自动切换策略
+    if ratio < 0.002 or max(h, w) < 400:
+        # 小字体 + 小图像时，快速填色就够了
+        print("🧠 策略判断：使用 INPAINT_TELEA（快速修复）")
+        return cv2.INPAINT_TELEA
+    else:
+        print("🧠 策略判断：使用 INPAINT_NS（结构修复）")
+        return cv2.INPAINT_NS
+
+# 输出文件夹
 os.makedirs(output_log_folder, exist_ok=True)
 
 def process_image(img_path):
@@ -80,8 +99,11 @@ def process_image(img_path):
         print(f"❌ 无法读取掩码图像：{mask_path}")
         return
 
-    # 使用 Navier-Stokes 修复方法（可改为 INPAINT_TELEA）
-    inpainted = cv2.inpaint(img, mask, inpaintRadius=3, flags=cv2.INPAINT_NS)
+    # 自动选择修复策略
+    method = choose_inpaint_method(img, mask)
+    
+    # 执行修复
+    inpainted = cv2.inpaint(img, mask, inpaintRadius=3, flags=method)
 
     # 保存修复后图像
     cv2.imwrite(output_cleaned_path, inpainted)
