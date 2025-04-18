@@ -23,11 +23,7 @@ SmartTextRemoval3.0/
 │   └── detect_text.py           # 封装PaddleOCR或Tesseract调用
 ├── utils/                       # 模块2：掩码生成工具
 │   └── mask_generator.py        # 根据OCR坐标生成掩码（OpenCV绘图）
-├── lama_cleaner_model/          # 模块3：修复模型调用（如LaMa）
-│   └── run_lama_cleaner.py      # 调用修复模型填补被删除文字
-├── pretrained/          # 预训练模型
-│   └── big-lama/
-├── lama/                # 安装 LaMa 推理代码
+
 ├── lama_env/                    # 虚拟环境目录（可忽略上传，仅本地生成）
 ├── main.py                      # 主程序，串联整个流程
 ├── setup_env.bat                # 一键创建并激活虚拟环境 + 安装依赖的脚本
