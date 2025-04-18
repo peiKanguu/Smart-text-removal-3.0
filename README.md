@@ -89,37 +89,10 @@ SmartTextRemoval3.0/
 - 输出：
   - 掩码图 mask（单通道、黑白图像，文字区域为255，背景为0）
 
-#### 修复模型调用（LaMa）
-使用 OCR 生成的掩码，对图像进行内容感知修复，去除文字并还原背景。
-使用的是 PyTorch 版本的 LaMa
-##### 准备工作
-第一步：将模型放入项目目录下
-```python
-Smart-text-removal-3.0/
-├── pretrained/
-│   └── big-lama/
-│       ├── models/
-│       │   └── best.ckpt
-│       └── config.yaml
-```
-第二步：安装 LaMa 推理代码（只需代码，不需要下载模型）
-打开终端，进入你的项目目录下运行：
-```python
-git clone https://github.com/saic-mdal/lama.git
-```
-此时
-```python
-Smart-text-removal-3.0/
-├── pretrained/
-│   └── big-lama/
-├── lama/
-│   └── saicinpainting/       ← 包含核心代码
-```
-- 修复模型输入：
-  - 原图：image（OpenCV读取）
-  - 掩码：mask（文字区域为255，背景为0）
-- 输出图像：cleaned_image（修复后的图）
-- 
+#### 修复模型调用（openCV内置修复策略）
+INPAINT_TELEA
+INPAINT_NS
+
 
 ## 🛠️ 待办建议（可选）
 
