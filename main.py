@@ -68,6 +68,25 @@ def process_image(img_path):
     # 🧪 步骤 3：生成并保存调试用掩码图
     mask_path = os.path.join(output_mask_folder, base_name + '_mask.png')
     mask = generate_mask(img, detections, save_path=mask_path)
+    
+    # 🧽 步骤 4：使用 OpenCV 进行图像修复
+    output_cleaned_folder = './outputs/cleaned_images'
+    os.makedirs(output_cleaned_folder, exist_ok=True)
+    output_cleaned_path = os.path.join(output_cleaned_folder, base_name + '_cleaned.png')
+
+    # 读取掩码（灰度图）
+    mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+    if mask is None:
+        print(f"❌ 无法读取掩码图像：{mask_path}")
+        return
+
+    # 使用 Navier-Stokes 修复方法（可改为 INPAINT_TELEA）
+    inpainted = cv2.inpaint(img, mask, inpaintRadius=3, flags=cv2.INPAINT_NS)
+
+    # 保存修复后图像
+    cv2.imwrite(output_cleaned_path, inpainted)
+    print(f"🖼️ 图像修复完成：{output_cleaned_path}")
+
 
 if __name__ == "__main__":
     print("🚀 开始批量处理图片...")
