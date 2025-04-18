@@ -5,6 +5,10 @@ from tqdm import tqdm
 import numpy as np
 np.int = int  # ✅ 解决 numpy.int 报错
 from utils.mask_generator import generate_mask
+from utils.blur_detector import detect_blur_variance_laplacian
+from utils.resolution_utils import is_low_resolution
+from utils.image_scaler import enlarge_image
+
 
 # ✅ 安全导入 detect_text
 try:
@@ -17,6 +21,8 @@ except Exception as e:
 input_folder = './datasets/input_images'
 output_log_folder = './outputs/detection_logs'
 output_mask_folder = './outputs/mask_debug'
+output_enlarge_folder = './outputs/enlarge_image'
+
 
 # 根据图片特征（尺寸 + 掩码特征）判断使用openCV的算法
 def choose_inpaint_method(img, mask):
@@ -50,6 +56,28 @@ def process_image(img_path):
         print(f"❌ 无法读取图像：{img_path}")
         return
 
+    # ✅ 判断是否为低分辨率图像
+    h, w = img.shape[:2]
+    print(f"📐 当前图像分辨率：{w}x{h}")
+    if is_low_resolution(img):
+        print(f"📏 图像分辨率较低，建议进行放大处理（如使用超分辨率）")
+        img = enlarge_image(img, scale=4)
+        # 保存放大图像到中间产物文件夹
+        enlarged_path = os.path.join(output_enlarge_folder, base_name + '_enlarged.png')
+        cv2.imwrite(enlarged_path, img)
+        # TODO: 可插入 Real-ESRGAN 超分代码
+        # img = upscale_image(img)  ← 后续扩展点
+
+
+    # 🔍 模糊检测
+    blur_result = detect_blur_variance_laplacian(img)
+    print(f"🧠 模糊检测 - 方法: {blur_result['method']} | 分数: {blur_result['score']:.2f} | 模糊: {blur_result['is_blur']}")
+    
+    if blur_result['is_blur']:
+        print("⚠️ 图像模糊，建议执行超分处理")
+        # ✅ 你可以在这里插入后续逻辑：是否跳过/先放大图像/保存标记
+        # return  # 如果想跳过模糊图像
+        
     # 🧠 步骤 1：OCR识别
     detections = detect_text(img)  # list of dicts: {'text', 'score', 'bbox'}
     
