@@ -8,6 +8,10 @@ from utils.mask_generator import generate_mask
 from utils.blur_detector import detect_blur_variance_laplacian
 from utils.resolution_utils import is_low_resolution
 from utils.image_scaler import enlarge_image
+from utils.upscaler import upscale_with_realesrgan
+
+output_superres_folder = './outputs/super_resolution'
+os.makedirs(output_superres_folder, exist_ok=True)
 
 
 # ✅ 安全导入 detect_text
@@ -47,102 +51,118 @@ def choose_inpaint_method(img, mask):
 os.makedirs(output_log_folder, exist_ok=True)
 
 def process_image(img_path):
-    import json
+    print()
     img_name = os.path.basename(img_path)
     base_name = os.path.splitext(img_name)[0]
+    original_img = cv2.imread(img_path)
 
-    img = cv2.imread(img_path)
-    if img is None:
+    if original_img is None:
         print(f"❌ 无法读取图像：{img_path}")
         return
 
-    # ✅ 判断是否为低分辨率图像
-    h, w = img.shape[:2]
+    h, w = original_img.shape[:2]
     print(f"📐 当前图像分辨率：{w}x{h}")
-    if is_low_resolution(img):
-        print(f"📏 图像分辨率较低，建议进行放大处理（如使用超分辨率）")
-        img = enlarge_image(img, scale=4)
-        # 保存放大图像到中间产物文件夹
+
+    # 状态记录变量
+    is_low_res = is_low_resolution(original_img)
+    was_enlarged = False
+    was_super_resolved = False
+    was_modified = False
+    working_img = original_img.copy()
+
+    # ✅ 放大
+    if is_low_res:
+        print(f"📏 图像分辨率较低，执行插值放大")
+        working_img = enlarge_image(working_img, scale=4)
+        was_enlarged = True
         enlarged_path = os.path.join(output_enlarge_folder, base_name + '_enlarged.png')
-        cv2.imwrite(enlarged_path, img)
-        # TODO: 可插入 Real-ESRGAN 超分代码
-        # img = upscale_image(img)  ← 后续扩展点
+        cv2.imwrite(enlarged_path, working_img)
 
-
-    # 🔍 模糊检测
-    blur_result = detect_blur_variance_laplacian(img)
+    # ✅ 模糊检测 + 超分
+    blur_result = detect_blur_variance_laplacian(working_img)
     print(f"🧠 模糊检测 - 方法: {blur_result['method']} | 分数: {blur_result['score']:.2f} | 模糊: {blur_result['is_blur']}")
-    
     if blur_result['is_blur']:
-        print("⚠️ 图像模糊，建议执行超分处理")
-        # ✅ 你可以在这里插入后续逻辑：是否跳过/先放大图像/保存标记
-        # return  # 如果想跳过模糊图像
-        
-    # 🧠 步骤 1：OCR识别
-    detections = detect_text(img)  # list of dicts: {'text', 'score', 'bbox'}
-    
-    # ✅ 打印识别结果概览
+        print("⚠️ 图像模糊，调用 Real-ESRGAN 超分处理")
+        enhanced_img = upscale_with_realesrgan(working_img, base_name, output_superres_folder)
+        if enhanced_img is not None:
+            working_img = enhanced_img
+            was_super_resolved = True
+
+    # ✅ OCR识别
+    detections = detect_text(working_img)
     print(f"📄 正在处理：{img_name} - 🔍 识别到 {len(detections)} 个文字区域")
-    
-    # ✅ 打印每一条文字识别内容和置信度
+
     if detections:
         for i, item in enumerate(detections, 1):
-            text = item['text']
-            score = item['score']
-            print(f"   ✏️ [{i}] \"{text}\"（置信度: {score:.2f}）")
+            print(f"   ✏️ [{i}] \"{item['text']}\"（置信度: {item['score']:.2f}）")
+        was_modified = True
     else:
-        print("   ⚠️ 未检测到任何文字")
-    
-    # 📝 步骤 2：写入日志 JSON 文件
+        print("⚠️ 未检测到文字，直接保存原图为清洁图")
+        output_cleaned_path = os.path.join('./outputs/cleaned_images', base_name + '_cleaned.png')
+        cv2.imwrite(output_cleaned_path, original_img)
+        # ✅ 写日志
+        log_data = {
+            "filename": img_name,
+            "original_resolution": f"{w}x{h}",
+            "is_low_resolution": is_low_res,
+            "was_enlarged": was_enlarged,
+            "was_super_resolved": was_super_resolved,
+            "was_modified": was_modified,
+            "detections": []
+        }
+        log_path = os.path.join(output_log_folder, base_name + '_ocr_log.json')
+        with open(log_path, 'w', encoding='utf-8') as f:
+            json.dump(log_data, f, ensure_ascii=False, indent=2)
+        print(f"📄 日志记录已保存：{log_path}")
+        return  # ✅ 跳过后续步骤
+
+    # ✅ 掩码生成 + 修复
+    mask_path = os.path.join(output_mask_folder, base_name + '_mask.png')
+    mask = generate_mask(working_img, detections, save_path=mask_path)
+
+    mask_gray = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+    if mask_gray is None:
+        print(f"❌ 无法读取掩码图像：{mask_path}")
+        return
+
+    method = choose_inpaint_method(working_img, mask_gray)
+    inpainted = cv2.inpaint(working_img, mask_gray, inpaintRadius=3, flags=method)
+
+    # ✅ 恢复输出为原图大小
+    final_output = cv2.resize(inpainted, (w, h))
+    output_cleaned_path = os.path.join('./outputs/cleaned_images', base_name + '_cleaned.png')
+    cv2.imwrite(output_cleaned_path, final_output)
+    print(f"🖼️ 图像修复完成：{output_cleaned_path}")
+
+    # ✅ 写日志
     log_data = {
         "filename": img_name,
-        "detections": []
+        "original_resolution": f"{w}x{h}",
+        "is_low_resolution": is_low_res,
+        "was_enlarged": was_enlarged,
+        "was_super_resolved": was_super_resolved,
+        "was_modified": was_modified,
+        "detections": [  # 仅当 modified 为 True 时有内容
+            {
+                "text": d.get("text", ""),
+                "score": round(d.get("score", 0.0), 4),
+                "bbox": d.get("box", [])
+            }
+            for d in detections
+        ]
     }
-
-    for det in detections:
-        log_data["detections"].append({
-            "text": det.get("text", ""),
-            "score": round(det.get("score", 0.0), 4),
-            "bbox": det.get("box", [])  # 用 .get 安全访问
-        })
 
     log_path = os.path.join(output_log_folder, base_name + '_ocr_log.json')
     with open(log_path, 'w', encoding='utf-8') as f:
         json.dump(log_data, f, ensure_ascii=False, indent=2)
-
-    print(f"✅ {img_name} -> 识别结果已保存至日志")
-    
-    # 🧪 步骤 3：生成并保存调试用掩码图
-    mask_path = os.path.join(output_mask_folder, base_name + '_mask.png')
-    mask = generate_mask(img, detections, save_path=mask_path)
-    
-    # 🧽 步骤 4：使用 OpenCV 进行图像修复
-    output_cleaned_folder = './outputs/cleaned_images'
-    os.makedirs(output_cleaned_folder, exist_ok=True)
-    output_cleaned_path = os.path.join(output_cleaned_folder, base_name + '_cleaned.png')
-
-    # 读取掩码（灰度图）
-    mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-    if mask is None:
-        print(f"❌ 无法读取掩码图像：{mask_path}")
-        return
-
-    # 自动选择修复策略
-    method = choose_inpaint_method(img, mask)
-    
-    # 执行修复
-    inpainted = cv2.inpaint(img, mask, inpaintRadius=3, flags=method)
-
-    # 保存修复后图像
-    cv2.imwrite(output_cleaned_path, inpainted)
-    print(f"🖼️ 图像修复完成：{output_cleaned_path}")
+    print(f"📄 日志记录已保存：{log_path}")
 
 
 if __name__ == "__main__":
     print("🚀 开始批量处理图片...")
     # ✅ 获取所有待处理图片路径
     image_files = [f for f in os.listdir(input_folder)
-                   if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+                   if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
 
     print(f"📸 待处理图片数量: {len(image_files)}")
 
