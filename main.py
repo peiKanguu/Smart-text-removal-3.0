@@ -4,28 +4,39 @@ import json
 from tqdm import tqdm
 import numpy as np
 np.int = int  # ✅ 解决 numpy.int 报错
+
+# ✅ 检查 PyTorch 和 GPU 是否可用
+try:
+    import torch
+    HAS_TORCH = True
+    HAS_GPU = torch.cuda.is_available()
+    print(f"🧠 PyTorch 检测成功，GPU 状态: {'可用' if HAS_GPU else '不可用'}")
+except ImportError:
+    HAS_TORCH = False
+    HAS_GPU = False
+    print("⚠️ 未安装 PyTorch，将使用 OpenCV 修复")
+
 from utils.mask_generator import generate_mask
 from utils.blur_detector import detect_blur_variance_laplacian
 from utils.resolution_utils import is_low_resolution
 from utils.image_scaler import enlarge_image
 from utils.upscaler import upscale_with_realesrgan
 
-output_superres_folder = './outputs/super_resolution'
-os.makedirs(output_superres_folder, exist_ok=True)
-
-
-# ✅ 安全导入 detect_text
-try:
-    from detect.detect_text import detect_text # OCR 模块
-except Exception as e:
-    print("❌ 导入模块失败:", e)
-    exit(1)
-
 # 配置路径
 input_folder = './datasets/input_images'
 output_log_folder = './outputs/detection_logs'
 output_mask_folder = './outputs/mask_debug'
 output_enlarge_folder = './outputs/enlarge_image'
+output_superres_folder = './outputs/super_resolution'
+os.makedirs(output_superres_folder, exist_ok=True)
+
+
+# 安全导入 detect_text
+try:
+    from detect.detect_text import detect_text # OCR 模块
+except Exception as e:
+    print("❌ 导入模块失败:", e)
+    exit(1)
 
 
 # 根据图片特征（尺寸 + 掩码特征）判断使用openCV的算法
@@ -78,15 +89,7 @@ def process_image(img_path):
         enlarged_path = os.path.join(output_enlarge_folder, base_name + '_enlarged.png')
         cv2.imwrite(enlarged_path, working_img)
 
-    # ✅ 模糊检测 + 超分
-    blur_result = detect_blur_variance_laplacian(working_img)
-    print(f"🧠 模糊检测 - 方法: {blur_result['method']} | 分数: {blur_result['score']:.2f} | 模糊: {blur_result['is_blur']}")
-    if blur_result['is_blur']:
-        print("⚠️ 图像模糊，调用 Real-ESRGAN 超分处理")
-        enhanced_img = upscale_with_realesrgan(working_img, base_name, output_superres_folder)
-        if enhanced_img is not None:
-            working_img = enhanced_img
-            was_super_resolved = True
+
 
     # ✅ OCR识别
     detections = detect_text(working_img)
@@ -125,8 +128,43 @@ def process_image(img_path):
         print(f"❌ 无法读取掩码图像：{mask_path}")
         return
 
-    method = choose_inpaint_method(working_img, mask_gray)
-    inpainted = cv2.inpaint(working_img, mask_gray, inpaintRadius=3, flags=method)
+#    method = choose_inpaint_method(working_img, mask_gray)
+#    inpainted = cv2.inpaint(working_img, mask_gray, inpaintRadius=3, flags=method)
+    # === 智能选择修复方式（优先使用 LaMa） ===
+    lama_output_path = os.path.join('./outputs/cleaned_images', base_name + '_cleaned.png')
+
+    use_lama = HAS_TORCH and HAS_GPU  # 如果你希望 CPU 也支持 LaMa 可放宽条件
+
+    if use_lama:
+        try:
+            print("🧠 使用 LaMa 进行大模型修复")
+            from lama_cleaner_model.run_lama_cleaner import run_lama_cleaner
+            
+            # 如果 working_img 是经过放大/超分的，需要先保存临时图
+            working_img_path = os.path.join('./outputs/tmp', base_name + '_working.png')
+            os.makedirs('./outputs/tmp', exist_ok=True)
+            cv2.imwrite(working_img_path, working_img)
+            
+            run_lama_cleaner(
+                image_path=working_img_path,
+                mask_path=mask_path,
+                output_path=lama_output_path
+            )
+
+            inpainted = cv2.imread(lama_output_path)
+            if inpainted is None:
+                raise ValueError("LaMa 修复失败，未能读取修复结果图像")
+
+        except Exception as e:
+            print(f"❌ LaMa 修复失败，回退 OpenCV: {e}")
+            method = choose_inpaint_method(working_img, mask_gray)
+            inpainted = cv2.inpaint(working_img, mask_gray, inpaintRadius=3, flags=method)
+
+    else:
+        print("🧩 未检测到 PyTorch + GPU，使用 OpenCV 修复")
+        method = choose_inpaint_method(working_img, mask_gray)
+        inpainted = cv2.inpaint(working_img, mask_gray, inpaintRadius=3, flags=method)
+
 
     # ✅ 恢复输出为原图大小
     final_output = cv2.resize(inpainted, (w, h))
