@@ -101,9 +101,9 @@ SmartTextRemoval3.0/
 - 输出：
   - 掩码图 mask（单通道、黑白图像，文字区域为255，背景为0）
 
-#### 修复模型调用（openCV内置修复策略）
-INPAINT_TELEA
-INPAINT_NS
+#### 修复模型调用
+- 首先尝试使用 LaMa 大模型進行修复（需要安裝 `lama-cleaner` 並檢測到可用的 PyTorch 環境）
+- 若 LaMa 不可用，則回退至 OpenCV 的 INPAINT_TELEA/INPAINT_NS 策略
 
 
 ## 🛠️ 待办建议（可选）

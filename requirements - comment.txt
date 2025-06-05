@@ -12,3 +12,5 @@ einops                       # 用于处理Tensor结构的轻量级工具（LaMa
 omegaconf                    # 配置管理库，用于LaMa模型参数加载
 Pillow                       # 图像读写与格式转换，用于增强兼容性
 albumentations               # 数据增强库，LaMa或图像处理阶段可能使用
+
+lama-cleaner            # 基于 PyTorch 的 LaMa 图像修复工具
